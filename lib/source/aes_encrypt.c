@@ -121,7 +121,7 @@ static inline void sub_bytes(uint8_t *s) //Subbytes_Substitution : S-box table�
 
 #define triple(a)(_double_byte(a)^(a))
 
-static inline void mult_row_column(uint8_t *out, const uint8_t *in)
+static inline void mult_row_column(uint8_t *out, const uint8_t *in) // 4x4
 {
 	out[0] = _double_byte(in[0]) ^ triple(in[1]) ^ in[2] ^ in[3];
 	out[1] = in[0] ^ _double_byte(in[1]) ^ triple(in[2]) ^ in[3];
@@ -171,9 +171,9 @@ int tc_aes_encrypt(uint8_t *out, const uint8_t *in, const TCAesKeySched_t s)
 	(void)_copy(state, sizeof(state), in, sizeof(state));
 	add_round_key(state, s->words); // 먼저 add_round_key 실행
 
-	for (i = 0; i < (Nr - 1); ++i) {    //첫번째~마지막 라운드가 전까지 반복
-		sub_bytes(state); //sub_bytes
-		shift_rows(state); //shift_rows
+	for (i = 0; i < (Nr - 1); ++i) {    //첫번째~마지막 라운드 전까지 반복
+		sub_bytes(state); // sub_bytes
+		shift_rows(state); // shift_rows
 		mix_columns(state); // mix_cloumns
 		add_round_key(state, s->words + Nb*(i+1)); //add_round_key
 	}
