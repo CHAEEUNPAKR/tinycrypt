@@ -57,7 +57,7 @@ static const uint8_t inv_sbox[256] = {
 	0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61,
 	0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63,
 	0x55, 0x21, 0x0c, 0x7d
-};
+}; // Inv S-Box table(256bytes)
 
 int tc_aes128_set_decrypt_key(TCAesKeySched_t s, const uint8_t *k)
 {
@@ -70,7 +70,7 @@ int tc_aes128_set_decrypt_key(TCAesKeySched_t s, const uint8_t *k)
 #define multd(a)(mult8(a)^_double_byte(_double_byte(a))^(a))
 #define multe(a)(mult8(a)^_double_byte(_double_byte(a))^_double_byte(a))
 
-static inline void mult_row_column(uint8_t *out, const uint8_t *in)
+static inline void mult_row_column(uint8_t *out, const uint8_t *in) // 4x4
 {
 	out[0] = multe(in[0]) ^ multb(in[1]) ^ multd(in[2]) ^ mult9(in[3]);
 	out[1] = mult9(in[0]) ^ multe(in[1]) ^ multb(in[2]) ^ multd(in[3]);
@@ -78,7 +78,7 @@ static inline void mult_row_column(uint8_t *out, const uint8_t *in)
 	out[3] = multb(in[0]) ^ multd(in[1]) ^ mult9(in[2]) ^ multe(in[3]);
 }
 
-static inline void inv_mix_columns(uint8_t *s)
+static inline void inv_mix_columns(uint8_t *s) // Inv_MixCloumns : MixCloumns 연산의 역 변환, 4x4 matrix과 각 column의 곱의 output으로 열 반환
 {
 	uint8_t t[Nb*Nk];
 
@@ -89,7 +89,7 @@ static inline void inv_mix_columns(uint8_t *s)
 	(void)_copy(s, sizeof(t), t, sizeof(t));
 }
 
-static inline void add_round_key(uint8_t *s, const unsigned int *k)
+static inline void add_round_key(uint8_t *s, const unsigned int *k) // AddRoundKey : key값을 4x4 matrix로 만든 후 XOR 
 {
 	s[0] ^= (uint8_t)(k[0] >> 24); s[1] ^= (uint8_t)(k[0] >> 16);
 	s[2] ^= (uint8_t)(k[0] >> 8); s[3] ^= (uint8_t)(k[0]);
@@ -101,12 +101,12 @@ static inline void add_round_key(uint8_t *s, const unsigned int *k)
 	s[14] ^= (uint8_t)(k[3] >> 8); s[15] ^= (uint8_t)(k[3]);
 }
 
-static inline void inv_sub_bytes(uint8_t *s)
+static inline void inv_sub_bytes(uint8_t *s) // Inv_Subbytes : Subbytes의 역변환, Inv S-box table을 이용하여 byte단위 형태로 블록을 교환
 {
 	unsigned int i;
 
 	for (i = 0; i < (Nb*Nk); ++i) {
-		s[i] = inv_sbox[s[i]];
+		s[i] = inv_sbox[s[i]]; //교환
 	}
 }
 
@@ -115,7 +115,7 @@ static inline void inv_sub_bytes(uint8_t *s)
  * inv_mix_columns, but performs it here to reduce the number of memory
  * operations.
  */
-static inline void inv_shift_rows(uint8_t *s)
+static inline void inv_shift_rows(uint8_t *s) // Inv_ShiftRows : ShiftRow과정에서 왼쪽으로 민 것을 다시 오른쪽으로 미는, 시프트 연산을 하는 과정
 {
 	uint8_t t[Nb*Nk];
 
@@ -141,15 +141,16 @@ int tc_aes_decrypt(uint8_t *out, const uint8_t *in, const TCAesKeySched_t s)
 
 	(void)_copy(state, sizeof(state), in, sizeof(state));
 
-	add_round_key(state, s->words + Nb*Nr);
+	add_round_key(state, s->words + Nb*Nr); // 먼저 add_round_key 실행
 
-	for (i = Nr - 1; i > 0; --i) {
-		inv_shift_rows(state);
-		inv_sub_bytes(state);
-		add_round_key(state, s->words + Nb*i);
-		inv_mix_columns(state);
+	for (i = Nr - 1; i > 0; --i) { //round1 전까지 반복
+		inv_shift_rows(state); //inv_shift_rows
+		inv_sub_bytes(state); //inv_sub_bytes
+		add_round_key(state, s->words + Nb*i); //add_round_key
+		inv_mix_columns(state); //inv_mix_cloumns
 	}
-
+	
+	//마지막으로 실행하게 되는 라운드에는 inv_mix_columns을 실행하지 않음
 	inv_shift_rows(state);
 	inv_sub_bytes(state);
 	add_round_key(state, s->words);
