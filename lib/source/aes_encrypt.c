@@ -34,7 +34,7 @@
 #include <tinycrypt/utils.h>
 #include <tinycrypt/constants.h>
 
-static const uint8_t sbox[256] = {
+static const uint8_t sbox[256] = {                            
 	0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b,
 	0xfe, 0xd7, 0xab, 0x76, 0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
 	0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0, 0xb7, 0xfd, 0x93, 0x26,
@@ -57,7 +57,7 @@ static const uint8_t sbox[256] = {
 	0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
 	0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f,
 	0xb0, 0x54, 0xbb, 0x16
-};
+}; //S-box table(256bytes)
 
 static inline unsigned int rotword(unsigned int a)
 {
@@ -67,12 +67,12 @@ static inline unsigned int rotword(unsigned int a)
 #define subbyte(a, o)(sbox[((a) >> (o))&0xff] << (o))
 #define subword(a)(subbyte(a, 24)|subbyte(a, 16)|subbyte(a, 8)|subbyte(a, 0))
 
-int tc_aes128_set_encrypt_key(TCAesKeySched_t s, const uint8_t *k)
+int tc_aes128_set_encrypt_key(TCAesKeySched_t s, const uint8_t *k) 
 {
 	const unsigned int rconst[11] = {
 		0x00000000, 0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10000000,
 		0x20000000, 0x40000000, 0x80000000, 0x1b000000, 0x36000000
-	};
+	}; //11 round keys
 	unsigned int i;
 	unsigned int t;
 
@@ -93,12 +93,12 @@ int tc_aes128_set_encrypt_key(TCAesKeySched_t s, const uint8_t *k)
 			t = subword(rotword(t)) ^ rconst[i/Nk];
 		}
 		s->words[i] = s->words[i-Nk] ^ t;
-	}
+	} //Key_Expansion
 
 	return TC_CRYPTO_SUCCESS;
 }
 
-static inline void add_round_key(uint8_t *s, const unsigned int *k)
+static inline void add_round_key(uint8_t *s, const unsigned int *k) //AddRoundKey : key값을 4x4 matrix로 만든 후 XOR 
 {
 	s[0] ^= (uint8_t)(k[0] >> 24); s[1] ^= (uint8_t)(k[0] >> 16);
 	s[2] ^= (uint8_t)(k[0] >> 8); s[3] ^= (uint8_t)(k[0]);
@@ -110,12 +110,12 @@ static inline void add_round_key(uint8_t *s, const unsigned int *k)
 	s[14] ^= (uint8_t)(k[3] >> 8); s[15] ^= (uint8_t)(k[3]);
 }
 
-static inline void sub_bytes(uint8_t *s)
+static inline void sub_bytes(uint8_t *s) //Subbytes_Substitution : S-box table을 이용하여 byte단위 형태로 블록을 교환
 {
 	unsigned int i;
 
 	for (i = 0; i < (Nb * Nk); ++i) {
-		s[i] = sbox[s[i]];
+		s[i] = sbox[s[i]]; //교환
 	}
 }
 
@@ -129,7 +129,7 @@ static inline void mult_row_column(uint8_t *out, const uint8_t *in)
 	out[3] = triple(in[0]) ^ in[1] ^ in[2] ^ _double_byte(in[3]);
 }
 
-static inline void mix_columns(uint8_t *s)
+static inline void mix_columns(uint8_t *s) //MixCloumns_Mixing : 4x4 matrix과 각 column의 곱의 output으로 새로운 열 반환
 {
 	uint8_t t[Nb*Nk];
 
@@ -144,7 +144,7 @@ static inline void mix_columns(uint8_t *s)
  * This shift_rows also implements the matrix flip required for mix_columns, but
  * performs it here to reduce the number of memory operations.
  */
-static inline void shift_rows(uint8_t *s)
+static inline void shift_rows(uint8_t *s) //ShiftRows_Permutation : 16byte block을 4x4 byte 행렬로 보고 각 행마다 왼쪽으로 민다.
 {
 	uint8_t t[Nb * Nk];
 
@@ -169,15 +169,16 @@ int tc_aes_encrypt(uint8_t *out, const uint8_t *in, const TCAesKeySched_t s)
 	}
 
 	(void)_copy(state, sizeof(state), in, sizeof(state));
-	add_round_key(state, s->words);
+	add_round_key(state, s->words); // 먼저 add_round_key 실행
 
-	for (i = 0; i < (Nr - 1); ++i) {
-		sub_bytes(state);
-		shift_rows(state);
-		mix_columns(state);
-		add_round_key(state, s->words + Nb*(i+1));
+	for (i = 0; i < (Nr - 1); ++i) {    //첫번째~마지막 라운드가 전까지 반복
+		sub_bytes(state); //sub_bytes
+		shift_rows(state); //shift_rows
+		mix_columns(state); // mix_cloumns
+		add_round_key(state, s->words + Nb*(i+1)); //add_round_key
 	}
 
+	//마지막 라운드는 mix_columns을 실행하지 않음
 	sub_bytes(state);
 	shift_rows(state);
 	add_round_key(state, s->words + Nb*(i+1));
