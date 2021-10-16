@@ -49,7 +49,7 @@ int tc_sha256_init(TCSha256State_t s)
 	 * of the square roots of the first 8 primes: 2, 3, 5, 7, 11, 13, 17
 	 * and 19.
 	 */
-	_set((uint8_t *) s, 0x00, sizeof(*s));
+	_set((uint8_t *) s, 0x00, sizeof(*s)); //intialization value 32bit * 8 = 256 bit
 	s->iv[0] = 0x6a09e667;
 	s->iv[1] = 0xbb67ae85;
 	s->iv[2] = 0x3c6ef372;
@@ -72,10 +72,10 @@ int tc_sha256_update(TCSha256State_t s, const uint8_t *data, size_t datalen)
 		return TC_CRYPTO_SUCCESS;
 	}
 
-	while (datalen-- > 0) {
+	while (datalen-- > 0) { 
 		s->leftover[s->leftover_offset++] = *(data++);
 		if (s->leftover_offset >= TC_SHA256_BLOCK_SIZE) {
-			compress(s->iv, s->leftover);
+			compress(s->iv, s->leftover); 
 			s->leftover_offset = 0;
 			s->bits_hashed += (TC_SHA256_BLOCK_SIZE << 3);
 		}
@@ -105,7 +105,7 @@ int tc_sha256_final(uint8_t *digest, TCSha256State_t s)
 		s->leftover_offset = 0;
 	}
 
-	/* add the padding and the length in big-Endian format */
+	//padding 추가
 	_set(s->leftover + s->leftover_offset, 0x00,
 	     sizeof(s->leftover) - 8 - s->leftover_offset);
 	s->leftover[sizeof(s->leftover) - 1] = (uint8_t)(s->bits_hashed);
@@ -140,7 +140,7 @@ int tc_sha256_final(uint8_t *digest, TCSha256State_t s)
  * These values correspond to the first 32 bits of the fractional parts of the
  * cube roots of the first 64 primes between 2 and 311.
  */
-static const unsigned int k256[64] = {
+static const unsigned int k256[64] = { 
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
 	0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
 	0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
@@ -152,9 +152,9 @@ static const unsigned int k256[64] = {
 	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
 	0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
 	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-};
+}; //고정된 hash key
 
-static inline unsigned int ROTR(unsigned int a, unsigned int n)
+static inline unsigned int ROTR(unsigned int a, unsigned int n) //회전_word expansion
 {
 	return (((a) >> n) | ((a) << (32 - n)));
 }
@@ -178,40 +178,44 @@ static inline unsigned int BigEndian(const uint8_t **c)
 	return n;
 }
 
-static void compress(unsigned int *iv, const uint8_t *data)
+static void compress(unsigned int *iv, const uint8_t *data) //압축 함수
 {
-	unsigned int a, b, c, d, e, f, g, h;
-	unsigned int s0, s1;
+	unsigned int a, b, c, d, e, f, g, h; //256bit, each 32bit
+	unsigned int s0, s1; 
 	unsigned int t1, t2;
 	unsigned int work_space[16];
 	unsigned int n;
 	unsigned int i;
 
 	a = iv[0]; b = iv[1]; c = iv[2]; d = iv[3];
-	e = iv[4]; f = iv[5]; g = iv[6]; h = iv[7];
+	e = iv[4]; f = iv[5]; g = iv[6]; h = iv[7]; 
 
 	for (i = 0; i < 16; ++i) {
 		n = BigEndian(&data);
 		t1 = work_space[i] = n;
-		t1 += h + Sigma1(e) + Ch(e, f, g) + k256[i];
+		//mixer 1, 2
+		t1 += h + Sigma1(e) + Ch(e, f, g) + k256[i]; 
+		// h + (ROTR((e), 6) ^ ROTR((e), 11) ^ ROTR((e), 25)) + (((e) & (f)) ^ ((~(e)) & (g))) + hash key
 		t2 = Sigma0(a) + Maj(a, b, c);
-		h = g; g = f; f = e; e = d + t1;
-		d = c; c = b; b = a; a = t1 + t2;
-	}
+		// (ROTR((a), 2) ^ ROTR((a), 13) ^ ROTR((a), 22)) + (((a) & (b)) ^ ((a) & (c)) ^ ((b) & (c)))
+		h = g; g = f; f = e; e = d + t1; // e = d + t1 (add mod32)
+		d = c; c = b; b = a; a = t1 + t2; // a = t1 + t2 (add mod32)
 
 	for ( ; i < 64; ++i) {
 		s0 = work_space[(i+1)&0x0f];
-		s0 = sigma0(s0);
+		s0 = sigma0(s0); // (ROTR((s0), 7) ^ ROTR((s0), 18) ^ ((s0) >> 3))
 		s1 = work_space[(i+14)&0x0f];
-		s1 = sigma1(s1);
+		s1 = sigma1(s1); // (ROTR((s1), 17) ^ ROTR((s1), 19) ^ ((s1) >> 10))
 
 		t1 = work_space[i&0xf] += s0 + s1 + work_space[(i+9)&0xf];
 		t1 += h + Sigma1(e) + Ch(e, f, g) + k256[i];
+		// h + (ROTR((e), 6) ^ ROTR((e), 11) ^ ROTR((e), 25)) + (((e) & (f)) ^ ((~(e)) & (g))) + hash key
 		t2 = Sigma0(a) + Maj(a, b, c);
-		h = g; g = f; f = e; e = d + t1;
-		d = c; c = b; b = a; a = t1 + t2;
-	}
+		// (ROTR((a), 2) ^ ROTR((a), 13) ^ ROTR((a), 22)) + (((a) & (b)) ^ ((a) & (c)) ^ ((b) & (c)))
+		h = g; g = f; f = e; e = d + t1;  // e = d + t1 (add mod32)
+		d = c; c = b; b = a; a = t1 + t2; // a = t1 + t2 (add mod32)
+	} //64 round
 
-	iv[0] += a; iv[1] += b; iv[2] += c; iv[3] += d;
-	iv[4] += e; iv[5] += f; iv[6] += g; iv[7] += h;
+	iv[0] += a; iv[1] += b; iv[2] += c; iv[3] += d; 
+	iv[4] += e; iv[5] += f; iv[6] += g; iv[7] += h; //intial value를 더해 intvertible한 성질을 막음
 }
