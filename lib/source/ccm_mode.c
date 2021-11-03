@@ -37,7 +37,7 @@
 #include <stdio.h>
 
 int tc_ccm_config(TCCcmMode_t c, TCAesKeySched_t sched, uint8_t *nonce,
-		  unsigned int nlen, unsigned int mlen)
+		  unsigned int nlen, unsigned int mlen) //
 {
 
 	/* input sanity check: */
@@ -62,7 +62,7 @@ int tc_ccm_config(TCCcmMode_t c, TCAesKeySched_t sched, uint8_t *nonce,
  * Variation of CBC-MAC mode used in CCM.
  */
 static void ccm_cbc_mac(uint8_t *T, const uint8_t *data, unsigned int dlen,
-			unsigned int flag, TCAesKeySched_t sched)
+			unsigned int flag, TCAesKeySched_t sched) //CBC-MAC 모드(MAC 생성)
 {
 
 	unsigned int i;
@@ -78,7 +78,7 @@ static void ccm_cbc_mac(uint8_t *T, const uint8_t *data, unsigned int dlen,
 	while (i < dlen) {
 		T[i++ % (Nb * Nk)] ^= *data++;
 		if (((i % (Nb * Nk)) == 0) || dlen == i) {
-			(void) tc_aes_encrypt(T, T, sched);
+			(void) tc_aes_encrypt(T, T, sched); 
 		}
 	}
 }
@@ -91,7 +91,7 @@ static void ccm_cbc_mac(uint8_t *T, const uint8_t *data, unsigned int dlen,
  * 2 bytes of the nonce.
  */
 static int ccm_ctr_mode(uint8_t *out, unsigned int outlen, const uint8_t *in,
-			unsigned int inlen, uint8_t *ctr, const TCAesKeySched_t sched)
+			unsigned int inlen, uint8_t *ctr, const TCAesKeySched_t sched) //카운터모드(block to stream)
 {
 
 	uint8_t buffer[TC_AES_BLOCK_SIZE];
@@ -102,12 +102,12 @@ static int ccm_ctr_mode(uint8_t *out, unsigned int outlen, const uint8_t *in,
 	/* input sanity check: */
 	if (out == (uint8_t *) 0 ||
 	    in == (uint8_t *) 0 ||
-	    ctr == (uint8_t *) 0 ||
+	    ctr == (uint8_t *) 0 || 
 	    sched == (TCAesKeySched_t) 0 ||
 	    inlen == 0 ||
 	    outlen == 0 ||
 	    outlen != inlen) {
-		return TC_CRYPTO_FAIL;
+		return TC_CRYPTO_FAIL; 
 	}
 
 	/* copy the counter to the nonce */
@@ -143,8 +143,8 @@ int tc_ccm_generation_encryption(uint8_t *out, unsigned int olen,
 	/* input sanity check: */
 	if ((out == (uint8_t *) 0) ||
 		(c == (TCCcmMode_t) 0) ||
-		((plen > 0) && (payload == (uint8_t *) 0)) ||
-		((alen > 0) && (associated_data == (uint8_t *) 0)) ||
+		((plen > 0) && (payload == (uint8_t *) 0)) /*MAC 계산에 쓰이는 데이터*/ ||
+		((alen > 0) && (associated_data == (uint8_t *) 0)) /*연관 데이터*/ ||
 		(alen >= TC_CCM_AAD_MAX_BYTES) || /* associated data size unsupported */
 		(plen >= TC_CCM_PAYLOAD_MAX_BYTES) || /* payload size unsupported */
 		(olen < (plen + c->mlen))) {  /* invalid output buffer size */
@@ -152,7 +152,7 @@ int tc_ccm_generation_encryption(uint8_t *out, unsigned int olen,
 	}
 
 	uint8_t b[Nb * Nk];
-	uint8_t tag[Nb * Nk];
+	uint8_t tag[Nb * Nk]; //MAC
 	unsigned int i;
 
 	/* GENERATING THE AUTHENTICATION TAG: */
@@ -168,7 +168,7 @@ int tc_ccm_generation_encryption(uint8_t *out, unsigned int olen,
 	/* computing the authentication tag using cbc-mac: */
 	(void) tc_aes_encrypt(tag, b, c->sched);
 	if (alen > 0) {
-		ccm_cbc_mac(tag, associated_data, alen, 1, c->sched);
+		ccm_cbc_mac(tag, associated_data, alen, 1, c->sched); // T= MAC(Km, N||A||M)
 	}
 	if (plen > 0) {
 		ccm_cbc_mac(tag, payload, plen, 0, c->sched);
@@ -181,7 +181,7 @@ int tc_ccm_generation_encryption(uint8_t *out, unsigned int olen,
 	b[14] = b[15] = TC_ZERO_BYTE;
 
 	/* encrypting payload using ctr mode: */
-	ccm_ctr_mode(out, plen, payload, plen, b, c->sched);
+	ccm_ctr_mode(out, plen, payload, plen, b, c->sched); //카운터 모드 연산
 
 	b[14] = b[15] = TC_ZERO_BYTE; /* restoring initial counter for ctr_mode (0):*/
 
@@ -189,16 +189,16 @@ int tc_ccm_generation_encryption(uint8_t *out, unsigned int olen,
 	(void) tc_aes_encrypt(b, b, c->sched);
 	out += plen;
 	for (i = 0; i < c->mlen; ++i) {
-		*out++ = tag[i] ^ b[i];
+		*out++ = tag[i] ^ b[i]; // C= Enc(Kc, M||T)
 	}
 
-	return TC_CRYPTO_SUCCESS;
+	return TC_CRYPTO_SUCCESS; //암호화 데이터 + MAC
 }
 
 int tc_ccm_decryption_verification(uint8_t *out, unsigned int olen,
 				   const uint8_t *associated_data,
 				   unsigned int alen, const uint8_t *payload,
-				   unsigned int plen, TCCcmMode_t c)
+				   unsigned int plen, TCCcmMode_t c) 
 {
 
 	/* input sanity check: */
@@ -223,10 +223,11 @@ int tc_ccm_decryption_verification(uint8_t *out, unsigned int olen,
 	for (i = 1; i < 14; ++i) {
 		b[i] = c->nonce[i - 1];
 	}
+	
 	b[14] = b[15] = TC_ZERO_BYTE; /* initial counter value is 0 */
 
 	/* decrypting payload using ctr mode: */
-	ccm_ctr_mode(out, plen - c->mlen, payload, plen - c->mlen, b, c->sched);
+	ccm_ctr_mode(out, plen - c->mlen, payload, plen - c->mlen, b, c->sched); //카운터 모드 연산 복호화
 
 	b[14] = b[15] = TC_ZERO_BYTE; /* restoring initial counter value (0) */
 
@@ -236,9 +237,8 @@ int tc_ccm_decryption_verification(uint8_t *out, unsigned int olen,
 		tag[i] = *(payload + plen - c->mlen + i) ^ b[i];
 	}
 
-	/* VERIFYING THE AUTHENTICATION TAG: */
-
 	/* formatting the sequence b for authentication: */
+	
 	b[0] = ((alen > 0) ? 0x40:0)|(((c->mlen - 2) / 2 << 3)) | (1);
 	for (i = 1; i < 14; ++i) {
 		b[i] = c->nonce[i - 1];
@@ -246,7 +246,7 @@ int tc_ccm_decryption_verification(uint8_t *out, unsigned int olen,
 	b[14] = (uint8_t)((plen - c->mlen) >> 8);
 	b[15] = (uint8_t)(plen - c->mlen);
 
-	/* computing the authentication tag using cbc-mac: */
+	/* computing the authentication tag using cbc-mac: (MAC 연산)*/
 	(void) tc_aes_encrypt(b, b, c->sched);
 	if (alen > 0) {
 		ccm_cbc_mac(b, associated_data, alen, 1, c->sched);
@@ -255,12 +255,12 @@ int tc_ccm_decryption_verification(uint8_t *out, unsigned int olen,
 		ccm_cbc_mac(b, out, plen - c->mlen, 0, c->sched);
 	}
 
-	/* comparing the received tag and the computed one: */
+	/* comparing the received tag and the computed one: (tag값 검증, Verify(Km, N||A||M, T))*/
 	if (_compare(b, tag, c->mlen) == 0) {
-		return TC_CRYPTO_SUCCESS;
+		return TC_CRYPTO_SUCCESS; //검증 성공
   	} else {
 		/* erase the decrypted buffer in case of mac validation failure: */
 		_set(out, 0, plen - c->mlen);
-		return TC_CRYPTO_FAIL;
+		return TC_CRYPTO_FAIL; //실패
 	}
 }
